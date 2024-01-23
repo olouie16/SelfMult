@@ -56,6 +56,11 @@ public:
     void getStateInformation (juce::MemoryBlock& destData) override;
     void setStateInformation (const void* data, int sizeInBytes) override;
 
+    float delayValue = 0;
+    float exponentValue = 1;
+    float gainValue = 1;
+
+
 private:
     //==============================================================================
 
@@ -65,6 +70,7 @@ private:
     juce::AudioBuffer<float> delayBuffer;
     int delayBufferWriteIndex;
     int delayBufferReadIndex;
+
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (SelfMultAudioProcessor)
 };

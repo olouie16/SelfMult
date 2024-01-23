@@ -152,7 +152,7 @@ void SelfMultAudioProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce
     double sampleRate = getSampleRate();
 
     //hardcoded 100ms delay for the moment, userInput later
-    int delayInSamples = 100.0 / 1000.0 * sampleRate;   // todo change to float with interpolation
+    int delayInSamples = delayValue / 1000.0 * sampleRate;   // todo change to float with interpolation
     float delaySample;
 
     delayBufferReadIndex = delayBufferWriteIndex - delayInSamples;
@@ -187,8 +187,8 @@ void SelfMultAudioProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce
                 delaySample = delayBuffer.getSample(channel, delayBufferReadIndex + sample- delayBuffer.getNumSamples());
             }
 
-            channelData[sample] = channelData[sample] * pow(delaySample,1);
-
+            channelData[sample] = channelData[sample] * pow(abs(delaySample),exponentValue) * gainValue;
+            channelData[sample] = negative ? -channelData[sample] : channelData[sample];
         }
     }
 }
