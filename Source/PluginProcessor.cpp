@@ -54,11 +54,11 @@ bool SelfMultAudioProcessor::producesMidi() const
 
 bool SelfMultAudioProcessor::isMidiEffect() const
 {
-   #if JucePlugin_IsMidiEffect
+#if JucePlugin_IsMidiEffect
     return true;
-   #else
+#else
     return false;
-   #endif
+#endif
 }
 
 double SelfMultAudioProcessor::getTailLengthSeconds() const
@@ -69,7 +69,7 @@ double SelfMultAudioProcessor::getTailLengthSeconds() const
 int SelfMultAudioProcessor::getNumPrograms()
 {
     return 1;   // NB: some hosts don't cope very well if you tell them there are 0 programs,
-                // so this should be at least 1, even if you're not really implementing programs.
+    // so this should be at least 1, even if you're not really implementing programs.
 }
 
 int SelfMultAudioProcessor::getCurrentProgram()
@@ -77,24 +77,37 @@ int SelfMultAudioProcessor::getCurrentProgram()
     return 0;
 }
 
-void SelfMultAudioProcessor::setCurrentProgram (int index)
+void SelfMultAudioProcessor::setCurrentProgram(int index)
 {
 }
 
-const juce::String SelfMultAudioProcessor::getProgramName (int index)
+const juce::String SelfMultAudioProcessor::getProgramName(int index)
 {
     return {};
 }
 
-void SelfMultAudioProcessor::changeProgramName (int index, const juce::String& newName)
+void SelfMultAudioProcessor::changeProgramName(int index, const juce::String& newName)
 {
 }
 
 //==============================================================================
-void SelfMultAudioProcessor::prepareToPlay (double sampleRate, int samplesPerBlock)
+void SelfMultAudioProcessor::prepareToPlay(double sampleRate, int samplesPerBlock)
 {
     // Use this method as the place to do any pre-playback
     // initialisation that you need..
+
+    int totalNumInputChannels = getTotalNumInputChannels();
+    int totalNumOutputChannels = getTotalNumOutputChannels();
+
+    DBG("totalNumInputChannels: " + std::to_string(totalNumInputChannels));
+    DBG("totalNumOutputChannels: " + std::to_string(totalNumOutputChannels));
+
+    //setting 0.5sec as maxDelay, should be more than enough
+    int maxDelayInSamples = 0.5 * sampleRate;
+
+    delayBuffer = juce::AudioBuffer<float>(totalNumInputChannels, maxDelayInSamples);
+    delayBuffer.clear();
+    delayBufferWriteIndex = 0;
 }
 
 void SelfMultAudioProcessor::releaseResources()
@@ -104,59 +117,113 @@ void SelfMultAudioProcessor::releaseResources()
 }
 
 #ifndef JucePlugin_PreferredChannelConfigurations
-bool SelfMultAudioProcessor::isBusesLayoutSupported (const BusesLayout& layouts) const
+bool SelfMultAudioProcessor::isBusesLayoutSupported(const BusesLayout& layouts) const
 {
-  #if JucePlugin_IsMidiEffect
-    juce::ignoreUnused (layouts);
+#if JucePlugin_IsMidiEffect
+    juce::ignoreUnused(layouts);
     return true;
-  #else
+#else
     // This is the place where you check if the layout is supported.
     // In this template code we only support mono or stereo.
     // Some plugin hosts, such as certain GarageBand versions, will only
     // load plugins that support stereo bus layouts.
     if (layouts.getMainOutputChannelSet() != juce::AudioChannelSet::mono()
-     && layouts.getMainOutputChannelSet() != juce::AudioChannelSet::stereo())
+        && layouts.getMainOutputChannelSet() != juce::AudioChannelSet::stereo())
         return false;
 
     // This checks if the input layout matches the output layout
-   #if ! JucePlugin_IsSynth
+#if ! JucePlugin_IsSynth
     if (layouts.getMainOutputChannelSet() != layouts.getMainInputChannelSet())
         return false;
-   #endif
+#endif
 
     return true;
-  #endif
+#endif
 }
 #endif
 
-void SelfMultAudioProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::MidiBuffer& midiMessages)
+void SelfMultAudioProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce::MidiBuffer& midiMessages)
 {
     juce::ScopedNoDenormals noDenormals;
-    auto totalNumInputChannels  = getTotalNumInputChannels();
-    auto totalNumOutputChannels = getTotalNumOutputChannels();
+    int totalNumInputChannels = getTotalNumInputChannels();
+    int totalNumOutputChannels = getTotalNumOutputChannels();
 
-    // In case we have more outputs than inputs, this code clears any output
-    // channels that didn't contain input data, (because these aren't
-    // guaranteed to be empty - they may contain garbage).
-    // This is here to avoid people getting screaming feedback
-    // when they first compile a plugin, but obviously you don't need to keep
-    // this code if your algorithm always overwrites all the output channels.
-    for (auto i = totalNumInputChannels; i < totalNumOutputChannels; ++i)
+
+    double sampleRate = getSampleRate();
+
+    //hardcoded 100ms delay for the moment, userInput later
+    int delayInSamples = 100.0 / 1000.0 * sampleRate;   // todo change to float with interpolation
+    float delaySample;
+
+    delayBufferReadIndex = delayBufferWriteIndex - delayInSamples;
+    if (delayBufferReadIndex < 0)
+    {
+        delayBufferReadIndex += delayBuffer.getNumSamples();
+    }
+
+    //to avoid garbage in case more outputs than inputs
+    for (int i = totalNumInputChannels; i < totalNumOutputChannels; ++i)
         buffer.clear (i, 0, buffer.getNumSamples());
 
-    // This is the place where you'd normally do the guts of your plugin's
-    // audio processing...
-    // Make sure to reset the state if your inner loop is processing
-    // the samples and the outer loop is handling the channels.
-    // Alternatively, you can process the samples with the channels
-    // interleaved by keeping the same state.
+
+    writeToDelayBuffer(buffer);
+
+
     for (int channel = 0; channel < totalNumInputChannels; ++channel)
     {
         auto* channelData = buffer.getWritePointer (channel);
 
-        // ..do something to the data...
+
+        bool negative = false;
+        for (int sample = 0; sample < buffer.getNumSamples(); sample++) {
+            negative = channelData[sample] < 0 ? true : false;
+
+            if (delayBufferReadIndex + sample < delayBuffer.getNumSamples())
+            {
+                delaySample = delayBuffer.getSample(channel, delayBufferReadIndex + sample);
+            }
+            else
+            {
+                delaySample = delayBuffer.getSample(channel, delayBufferReadIndex + sample- delayBuffer.getNumSamples());
+            }
+
+            channelData[sample] = channelData[sample] * pow(delaySample,1);
+
+        }
     }
 }
+
+
+void SelfMultAudioProcessor::writeToDelayBuffer(juce::AudioBuffer<float>& buffer)
+{
+    int startWriteIndex = delayBufferWriteIndex;
+    int blockSize = buffer.getNumSamples();
+    bool wrap;
+    int nSamples;
+    //check if needing to wrap
+    if (delayBufferWriteIndex + blockSize >= delayBuffer.getNumSamples())
+    {
+        wrap = true;
+        nSamples = delayBuffer.getNumSamples() - delayBufferWriteIndex;
+    }
+    else
+    {
+        wrap = false;
+        nSamples = blockSize;
+    }
+
+    for (int channel = 0; channel < buffer.getNumChannels(); channel++)
+    {
+        delayBuffer.copyFrom(channel, delayBufferWriteIndex, buffer.getReadPointer(channel), nSamples);
+        if (wrap)
+        {
+            delayBuffer.copyFrom(channel, 0, buffer.getReadPointer(channel)+nSamples, blockSize-nSamples);
+        }
+    }
+
+    delayBufferWriteIndex = wrap ? blockSize - nSamples -1 : delayBufferWriteIndex+blockSize;
+}
+
 
 //==============================================================================
 bool SelfMultAudioProcessor::hasEditor() const

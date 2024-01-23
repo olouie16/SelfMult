@@ -58,5 +58,13 @@ public:
 
 private:
     //==============================================================================
+
+    void writeToDelayBuffer(juce::AudioBuffer<float>& buffer);
+
+
+    juce::AudioBuffer<float> delayBuffer;
+    int delayBufferWriteIndex;
+    int delayBufferReadIndex;
+
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (SelfMultAudioProcessor)
 };
