@@ -169,26 +169,46 @@ void SelfMultAudioProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce
     writeToDelayBuffer(buffer);
 
 
+    //adjustAutoVol
+    if (adjustingAutoVol)
+    {
+        for (int channel = 0; channel < totalNumInputChannels; ++channel)
+        {
+            auto* channelData = buffer.getWritePointer(channel);
+            for (int sample = 0; sample < buffer.getNumSamples(); sample++)
+            {
+                expectedMaxAmp = std::max(expectedMaxAmp, std::abs(channelData[sample]));
+            }
+        }
+
+        if (juce::Time::currentTimeMillis() - adjustingAutoVolStart > 2000)//after 2sec
+        {
+            adjustingAutoVol = false;
+            updateAutoVolValue();
+            adjustingAutoVol = false;
+
+        }
+    }
+
+
+
     for (int channel = 0; channel < totalNumInputChannels; ++channel)
     {
         auto* channelData = buffer.getWritePointer (channel);
 
 
-        bool negative = false;
-        for (int sample = 0; sample < buffer.getNumSamples(); sample++) {
-            negative = channelData[sample] < 0 ? true : false;
+        int negative;
+        for (int sample = 0; sample < buffer.getNumSamples(); sample++)
+        {
 
-            if (delayBufferReadIndex + sample < delayBuffer.getNumSamples())
-            {
-                delaySample = delayBuffer.getSample(channel, delayBufferReadIndex + sample);
-            }
-            else
-            {
-                delaySample = delayBuffer.getSample(channel, delayBufferReadIndex + sample- delayBuffer.getNumSamples());
-            }
+            delaySample = delayBuffer.getSample(channel, delayBufferReadIndex + sample - (delayBuffer.getNumSamples() * !(delayBufferReadIndex + sample < delayBuffer.getNumSamples())));
 
-            channelData[sample] = channelData[sample] * pow(abs(delaySample),exponentValue) * gainValue;
-            channelData[sample] = negative ? -channelData[sample] : channelData[sample];
+            //checking if result should be negative or positive as we have to use the absolute value in the power function. (e.g. -2^2.5 cant be computed)
+            negative = channelData[sample]*delaySample < 0 ? -1 : 1;
+            
+            channelData[sample] = channelData[sample] * pow(abs(delaySample),exponentValue) * autoVolValue * userVolValue;
+            channelData[sample] = negative * channelData[sample];
+
         }
     }
 }
@@ -225,6 +245,16 @@ void SelfMultAudioProcessor::writeToDelayBuffer(juce::AudioBuffer<float>& buffer
 }
 
 
+//updates autoVolValue by using expectedMaxAmp and exponentValue 
+void SelfMultAudioProcessor::updateAutoVolValue()
+{
+    //calculating the output of the expected maximal amplitude sample,
+    //then the inverse of it so it should normalise it to -1/1
+    //in the end multiply with expectedMaxAmp to regain about input level(in praxis probably a bit lower)
+    autoVolValue = 1 / pow(expectedMaxAmp, exponentValue + 1) * expectedMaxAmp;
+}
+
+
 //==============================================================================
 bool SelfMultAudioProcessor::hasEditor() const
 {
@@ -248,6 +278,13 @@ void SelfMultAudioProcessor::setStateInformation (const void* data, int sizeInBy
 {
     // You should use this method to restore your parameters from this memory block,
     // whose contents will have been created by the getStateInformation() call.
+}
+
+void SelfMultAudioProcessor::startAdjustingAutoVol()
+{
+    adjustingAutoVol = true;
+    adjustingAutoVolStart = juce::Time::currentTimeMillis();
+    expectedMaxAmp = 0;
 }
 
 //==============================================================================

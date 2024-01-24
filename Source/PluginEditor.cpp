@@ -19,12 +19,17 @@ SelfMultAudioProcessorEditor::SelfMultAudioProcessorEditor (SelfMultAudioProcess
 
     delaySlider.setSliderStyle(juce::Slider::RotaryHorizontalVerticalDrag);
     delaySlider.setRange(0.0, 50.0);
-    delaySlider.setSkewFactor(0.6);
+    delaySlider.setSkewFactor(0.35);
     delaySlider.setTextBoxStyle(juce::Slider::TextBoxBelow, true, 40, 20);
     delaySlider.setValue(0.0);
 
-    addAndMakeVisible(&delaySlider);
     delaySlider.addListener(this);
+    addAndMakeVisible(&delaySlider);
+
+    delayLabel.setText("d",juce::dontSendNotification);
+    delayLabel.attachToComponent(&delaySlider, false);
+    delayLabel.setJustificationType(juce::Justification::centredBottom);
+    addAndMakeVisible(delayLabel);
 
     exponentSlider.setSliderStyle(juce::Slider::RotaryHorizontalVerticalDrag);
     exponentSlider.setRange(0.0, 5.0);
@@ -32,17 +37,31 @@ SelfMultAudioProcessorEditor::SelfMultAudioProcessorEditor (SelfMultAudioProcess
     exponentSlider.setTextBoxStyle(juce::Slider::TextBoxBelow, true, 40, 20);
     exponentSlider.setValue(1.0);
 
-    addAndMakeVisible(&exponentSlider);
     exponentSlider.addListener(this);
+    addAndMakeVisible(&exponentSlider);
 
-    gainSlider.setSliderStyle(juce::Slider::LinearBarVertical);
-    gainSlider.setRange(0.0, 100.0, 0.0);
-    gainSlider.setTextBoxStyle(juce::Slider::NoTextBox, false, 90, 0);
-    gainSlider.setSkewFactorFromMidPoint(5);
-    gainSlider.setValue(1.0);
+    exponentLabel.setText("exp", juce::dontSendNotification);
+    exponentLabel.attachToComponent(&exponentSlider, false);
+    exponentLabel.setJustificationType(juce::Justification::centredBottom);
+    addAndMakeVisible(exponentLabel);
 
-    addAndMakeVisible(&gainSlider);
-    gainSlider.addListener(this);
+    volSlider.setSliderStyle(juce::Slider::LinearBarVertical);
+    volSlider.setRange(0.0, 10.0, 0.0);
+    volSlider.setTextBoxStyle(juce::Slider::NoTextBox, false, 90, 0);
+    volSlider.setSkewFactorFromMidPoint(5);
+    volSlider.setValue(1.0);
+
+    volSlider.addListener(this);
+    addAndMakeVisible(&volSlider);
+
+    volLabel.setText("vol", juce::dontSendNotification);
+    volLabel.attachToComponent(&volSlider, false);
+    volLabel.setJustificationType(juce::Justification::centredBottom);
+    addAndMakeVisible(volLabel);
+
+    autoVolButton.setButtonText("adjust automatic volume");
+    autoVolButton.addListener(this);
+    addAndMakeVisible(autoVolButton);
 
 }
 
@@ -68,12 +87,19 @@ void SelfMultAudioProcessorEditor::resized()
 
     delaySlider.setBounds(40, 50, 80, 80);
     exponentSlider.setBounds(100, 50, 80, 80);
-    gainSlider.setBounds(300, 50, 20, getHeight() - 60);
+    volSlider.setBounds(300, 50, 30, getHeight() - 60);
+    autoVolButton.setBounds(200, getHeight() - 90, 80, 30);
 
 }
 void SelfMultAudioProcessorEditor::sliderValueChanged(juce::Slider* slider)
 {
     audioProcessor.delayValue = delaySlider.getValue();
     audioProcessor.exponentValue = exponentSlider.getValue();
-    audioProcessor.gainValue = gainSlider.getValue();
+    audioProcessor.updateAutoVolValue();
+    audioProcessor.userVolValue = volSlider.getValue();
+}
+
+void SelfMultAudioProcessorEditor::buttonClicked(juce::Button* button)
+{
+    audioProcessor.startAdjustingAutoVol();
 }
