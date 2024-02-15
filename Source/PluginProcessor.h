@@ -72,10 +72,15 @@ private:
     //==============================================================================
 
     void writeToDelayBuffer(juce::AudioBuffer<float>& buffer);
-
+    float calcRmsVolumeFactor();
     juce::AudioBuffer<float> delayBuffer;
     int delayBufferWriteIndex;
     int delayBufferReadIndex;
+
+    juce::AudioBuffer<float> rmsBuffer;
+    float rmsSum;
+    int rmsBufferIndex;
+    int rmsWindowLength;
 
     bool adjustingAutoVol = false;
     juce::int64 adjustingAutoVolStart;

@@ -108,6 +108,13 @@ void SelfMultAudioProcessor::prepareToPlay(double sampleRate, int samplesPerBloc
     delayBuffer = juce::AudioBuffer<float>(totalNumInputChannels, maxDelayInSamples);
     delayBuffer.clear();
     delayBufferWriteIndex = 0;
+
+    rmsWindowLength = ceil(1.0 / 60 * sampleRate); // at least 1 full wave while expecting 60Hz as lowest frequency
+    rmsBuffer = juce::AudioBuffer<float>(totalNumInputChannels, rmsWindowLength);
+    rmsBuffer.clear();
+    rmsBufferIndex = 0;
+    rmsSum = 0;
+
 }
 
 void SelfMultAudioProcessor::releaseResources()
@@ -144,7 +151,7 @@ bool SelfMultAudioProcessor::isBusesLayoutSupported(const BusesLayout& layouts) 
 
 void SelfMultAudioProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce::MidiBuffer& midiMessages)
 {
-    juce::ScopedNoDenormals noDenormals;
+    //juce::ScopedNoDenormals noDenormals;
     int totalNumInputChannels = getTotalNumInputChannels();
     int totalNumOutputChannels = getTotalNumOutputChannels();
 
@@ -185,30 +192,38 @@ void SelfMultAudioProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce
         {
             adjustingAutoVol = false;
             updateAutoVolValue();
-            adjustingAutoVol = false;
 
         }
     }
 
 
-
+    int negative;
+    
+    float rmsFactor;
     for (int channel = 0; channel < totalNumInputChannels; ++channel)
     {
         auto* channelData = buffer.getWritePointer (channel);
+        auto* rmsData = rmsBuffer.getWritePointer(channel);
 
-
-        int negative;
         for (int sample = 0; sample < buffer.getNumSamples(); sample++)
         {
+            rmsSum -= rmsData[rmsBufferIndex];
+            rmsData[rmsBufferIndex] = pow(channelData[sample],2);
+            rmsSum += rmsData[rmsBufferIndex];
 
-            delaySample = delayBuffer.getSample(channel, delayBufferReadIndex + sample - (delayBuffer.getNumSamples() * !(delayBufferReadIndex + sample < delayBuffer.getNumSamples())));
+            delaySample = delayBuffer.getSample(channel, delayBufferReadIndex + sample - (delayBuffer.getNumSamples() * (delayBufferReadIndex + sample >= delayBuffer.getNumSamples())));
 
             //checking if result should be negative or positive as we have to use the absolute value in the power function. (e.g. -2^2.5 cant be computed)
             negative = channelData[sample]*delaySample < 0 ? -1 : 1;
-            
-            channelData[sample] = channelData[sample] * pow(abs(delaySample),exponentValue) * autoVolValue * userVolValue;
-            channelData[sample] = negative * channelData[sample];
 
+            rmsFactor = calcRmsVolumeFactor();
+            channelData[sample] = channelData[sample] * pow(abs(delaySample),exponentValue) * rmsFactor * userVolValue * negative;
+
+
+            if (++rmsBufferIndex >= rmsWindowLength)
+            {
+                rmsBufferIndex -= rmsWindowLength;
+            }
         }
     }
 }
@@ -285,6 +300,19 @@ void SelfMultAudioProcessor::startAdjustingAutoVol()
     adjustingAutoVol = true;
     adjustingAutoVolStart = juce::Time::currentTimeMillis();
     expectedMaxAmp = 0;
+}
+
+float SelfMultAudioProcessor::calcRmsVolumeFactor()
+{
+
+    if (rmsSum < 0.1)
+    {
+        return 0;
+    }
+
+    float t = std::sqrt(rmsSum / getSampleRate()) / std::sqrt(rmsWindowLength/(2*getSampleRate()));    
+    return 1 / pow(t, exponentValue);
+
 }
 
 //==============================================================================
