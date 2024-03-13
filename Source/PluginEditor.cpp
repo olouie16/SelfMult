@@ -59,9 +59,6 @@ SelfMultAudioProcessorEditor::SelfMultAudioProcessorEditor (SelfMultAudioProcess
     volLabel.setJustificationType(juce::Justification::centredBottom);
     addAndMakeVisible(volLabel);
 
-    autoVolButton.setButtonText("adjust automatic volume");
-    autoVolButton.addListener(this);
-    addAndMakeVisible(autoVolButton);
 
 }
 
@@ -88,18 +85,11 @@ void SelfMultAudioProcessorEditor::resized()
     delaySlider.setBounds(40, 50, 80, 80);
     exponentSlider.setBounds(100, 50, 80, 80);
     volSlider.setBounds(300, 50, 30, getHeight() - 60);
-    autoVolButton.setBounds(200, getHeight() - 90, 80, 30);
 
 }
 void SelfMultAudioProcessorEditor::sliderValueChanged(juce::Slider* slider)
 {
     audioProcessor.delayValue = delaySlider.getValue();
     audioProcessor.exponentValue = exponentSlider.getValue();
-    audioProcessor.updateAutoVolValue();
     audioProcessor.userVolValue = volSlider.getValue();
-}
-
-void SelfMultAudioProcessorEditor::buttonClicked(juce::Button* button)
-{
-    audioProcessor.startAdjustingAutoVol();
 }

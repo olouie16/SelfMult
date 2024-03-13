@@ -56,34 +56,27 @@ public:
     void getStateInformation (juce::MemoryBlock& destData) override;
     void setStateInformation (const void* data, int sizeInBytes) override;
 
-    void startAdjustingAutoVol();
-    void updateAutoVolValue();
-
     float delayValue = 0;
     float exponentValue = 1;
     float userVolValue = 1;
 
-    float expectedMaxAmp = 0.8; //used for autoVol
-    float autoVolValue = 1; //additional volume factor which reacts to exponentValue
-    
     float mixValue = 1; //not implemented yet
 
 private:
     //==============================================================================
 
     void writeToDelayBuffer(juce::AudioBuffer<float>& buffer);
-    float calcRmsVolumeFactor();
+    void calcRmsVolumeCoefs(juce::AudioBuffer<float>& input, int blockSize);
     juce::AudioBuffer<float> delayBuffer;
     int delayBufferWriteIndex;
     int delayBufferReadIndex;
 
     juce::AudioBuffer<float> rmsBuffer;
+    std::vector<std::vector<float> > rmsVolumeCoefs;
     float rmsSum;
     int rmsBufferIndex;
     int rmsWindowLength;
 
-    bool adjustingAutoVol = false;
-    juce::int64 adjustingAutoVolStart;
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (SelfMultAudioProcessor)
 };

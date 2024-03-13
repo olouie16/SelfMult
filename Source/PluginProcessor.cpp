@@ -115,6 +115,8 @@ void SelfMultAudioProcessor::prepareToPlay(double sampleRate, int samplesPerBloc
     rmsBufferIndex = 0;
     rmsSum = 0;
 
+    rmsVolumeCoefs = std::vector<std::vector<float> >(totalNumInputChannels,std::vector<float>(samplesPerBlock, 0));
+
 }
 
 void SelfMultAudioProcessor::releaseResources()
@@ -155,75 +157,37 @@ void SelfMultAudioProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce
     int totalNumInputChannels = getTotalNumInputChannels();
     int totalNumOutputChannels = getTotalNumOutputChannels();
 
-
-    double sampleRate = getSampleRate();
-
-    //hardcoded 100ms delay for the moment, userInput later
-    int delayInSamples = delayValue / 1000.0 * sampleRate;   // todo change to float with interpolation
-    float delaySample;
-
-    delayBufferReadIndex = delayBufferWriteIndex - delayInSamples;
-    if (delayBufferReadIndex < 0)
-    {
-        delayBufferReadIndex += delayBuffer.getNumSamples();
-    }
+    int blockSize = buffer.getNumSamples();
 
     //to avoid garbage in case more outputs than inputs
     for (int i = totalNumInputChannels; i < totalNumOutputChannels; ++i)
-        buffer.clear (i, 0, buffer.getNumSamples());
+        buffer.clear (i, 0, blockSize);
 
 
     writeToDelayBuffer(buffer);
 
-
-    //adjustAutoVol
-    if (adjustingAutoVol)
-    {
-        for (int channel = 0; channel < totalNumInputChannels; ++channel)
-        {
-            auto* channelData = buffer.getWritePointer(channel);
-            for (int sample = 0; sample < buffer.getNumSamples(); sample++)
-            {
-                expectedMaxAmp = std::max(expectedMaxAmp, std::abs(channelData[sample]));
-            }
-        }
-
-        if (juce::Time::currentTimeMillis() - adjustingAutoVolStart > 2000)//after 2sec
-        {
-            adjustingAutoVol = false;
-            updateAutoVolValue();
-
-        }
-    }
-
+    calcRmsVolumeCoefs(buffer, blockSize);
 
     int negative;
-    
-    float rmsFactor;
+    float delaySample;
     for (int channel = 0; channel < totalNumInputChannels; ++channel)
     {
         auto* channelData = buffer.getWritePointer (channel);
-        auto* rmsData = rmsBuffer.getWritePointer(channel);
+        auto* delayData = delayBuffer.getReadPointer(channel);
 
-        for (int sample = 0; sample < buffer.getNumSamples(); sample++)
+        for (int sample = 0; sample < blockSize; sample++)
         {
-            rmsSum -= rmsData[rmsBufferIndex];
-            rmsData[rmsBufferIndex] = pow(channelData[sample],2);
-            rmsSum += rmsData[rmsBufferIndex];
 
-            delaySample = delayBuffer.getSample(channel, delayBufferReadIndex + sample - (delayBuffer.getNumSamples() * (delayBufferReadIndex + sample >= delayBuffer.getNumSamples())));
+            delaySample = delayData[delayBufferReadIndex + sample - ( (delayBufferReadIndex + sample >= delayBuffer.getNumSamples()) ) * delayBuffer.getNumSamples()];
 
             //checking if result should be negative or positive as we have to use the absolute value in the power function. (e.g. -2^2.5 cant be computed)
             negative = channelData[sample]*delaySample < 0 ? -1 : 1;
 
-            rmsFactor = calcRmsVolumeFactor();
-            channelData[sample] = channelData[sample] * pow(abs(delaySample),exponentValue) * rmsFactor * userVolValue * negative;
+            channelData[sample] = channelData[sample] * pow(abs(delaySample),exponentValue) * rmsVolumeCoefs[channel][sample] * userVolValue * negative;
 
+            //if (channelData[sample] > 0.9) channelData[sample] = 0.9;
+            //if (channelData[sample] < -0.9) channelData[sample] = -0.9;
 
-            if (++rmsBufferIndex >= rmsWindowLength)
-            {
-                rmsBufferIndex -= rmsWindowLength;
-            }
         }
     }
 }
@@ -231,10 +195,20 @@ void SelfMultAudioProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce
 
 void SelfMultAudioProcessor::writeToDelayBuffer(juce::AudioBuffer<float>& buffer)
 {
-    int startWriteIndex = delayBufferWriteIndex;
     int blockSize = buffer.getNumSamples();
     bool wrap;
     int nSamples;
+
+    int delayInSamples = delayValue / 1000.0 * getSampleRate();   // todo maybe change to float with interpolation
+
+    delayBufferReadIndex = delayBufferWriteIndex - delayInSamples;
+    if (delayBufferReadIndex < 0)
+    {
+        delayBufferReadIndex += delayBuffer.getNumSamples();
+    }
+
+
+
     //check if needing to wrap
     if (delayBufferWriteIndex + blockSize >= delayBuffer.getNumSamples())
     {
@@ -259,15 +233,6 @@ void SelfMultAudioProcessor::writeToDelayBuffer(juce::AudioBuffer<float>& buffer
     delayBufferWriteIndex = wrap ? blockSize - nSamples -1 : delayBufferWriteIndex+blockSize;
 }
 
-
-//updates autoVolValue by using expectedMaxAmp and exponentValue 
-void SelfMultAudioProcessor::updateAutoVolValue()
-{
-    //calculating the output of the expected maximal amplitude sample,
-    //then the inverse of it so it should normalise it to -1/1
-    //in the end multiply with expectedMaxAmp to regain about input level(in praxis probably a bit lower)
-    autoVolValue = 1 / pow(expectedMaxAmp, exponentValue + 1) * expectedMaxAmp;
-}
 
 
 //==============================================================================
@@ -295,23 +260,36 @@ void SelfMultAudioProcessor::setStateInformation (const void* data, int sizeInBy
     // whose contents will have been created by the getStateInformation() call.
 }
 
-void SelfMultAudioProcessor::startAdjustingAutoVol()
+void SelfMultAudioProcessor::calcRmsVolumeCoefs(juce::AudioBuffer<float>& input, int blockSize)
 {
-    adjustingAutoVol = true;
-    adjustingAutoVolStart = juce::Time::currentTimeMillis();
-    expectedMaxAmp = 0;
-}
-
-float SelfMultAudioProcessor::calcRmsVolumeFactor()
-{
-
-    if (rmsSum < 0.1)
+    for (int channel = 0; channel < rmsVolumeCoefs.size(); channel++)
     {
-        return 0;
-    }
+        auto* channelData = input.getReadPointer(channel);
+        auto* rmsData = rmsBuffer.getWritePointer(channel);
 
-    float t = std::sqrt(rmsSum / getSampleRate()) / std::sqrt(rmsWindowLength/(2*getSampleRate()));    
-    return 1 / pow(t, exponentValue);
+        for (int i = 0; i < blockSize; i++)
+        {
+            rmsSum -= rmsData[rmsBufferIndex];
+            rmsData[rmsBufferIndex] = pow(channelData[i], 2);
+            rmsSum += rmsData[rmsBufferIndex];
+
+            if (rmsSum < 0.01)
+            {
+                rmsVolumeCoefs[channel][i] = 0;
+            }
+            else
+            {
+                rmsVolumeCoefs[channel][i] = 1 / pow(std::sqrt(rmsSum / getSampleRate()) / std::sqrt(rmsWindowLength / (2 * getSampleRate())), exponentValue);
+            }
+
+            if (++rmsBufferIndex >= rmsWindowLength)
+            {
+                rmsBufferIndex -= rmsWindowLength;
+            }
+
+        }
+
+    }
 
 }
 

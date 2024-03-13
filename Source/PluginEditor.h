@@ -14,7 +14,7 @@
 //==============================================================================
 /**
 */
-class SelfMultAudioProcessorEditor  : public juce::AudioProcessorEditor, private juce::Slider::Listener, private juce::Button::Listener
+class SelfMultAudioProcessorEditor  : public juce::AudioProcessorEditor, private juce::Slider::Listener
 {
 public:
     SelfMultAudioProcessorEditor (SelfMultAudioProcessor&);
@@ -30,7 +30,6 @@ private:
     SelfMultAudioProcessor& audioProcessor;
 
     void sliderValueChanged(juce::Slider* slider) override;
-    void buttonClicked(juce::Button* button) override;
     juce::Slider delaySlider;
     juce::Label delayLabel;
     juce::Slider exponentSlider;
@@ -38,7 +37,6 @@ private:
     juce::Slider volSlider;
     juce::Label volLabel;
 
-    juce::TextButton autoVolButton;
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (SelfMultAudioProcessorEditor)
 };
