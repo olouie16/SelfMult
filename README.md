@@ -1,6 +1,6 @@
 # SelfMult
 
-A Audio Plugin for a special kind of Distortion made in JUCE
+An Audio Plugin for a special kind of Distortion made in JUCE
 
 Born from an idea I had a while ago. 
 This plugin doesn't calculates the distortion the usual way, but more like the opposite of overdrive.
