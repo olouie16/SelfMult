@@ -32,7 +32,7 @@ SelfMultAudioProcessorEditor::SelfMultAudioProcessorEditor (SelfMultAudioProcess
     addAndMakeVisible(delayLabel);
 
     exponentSlider.setSliderStyle(juce::Slider::RotaryHorizontalVerticalDrag);
-    exponentSlider.setRange(0.0, 5.0);
+    exponentSlider.setRange(0.0, 3.0);
     exponentSlider.setSkewFactorFromMidPoint(1.0);
     exponentSlider.setTextBoxStyle(juce::Slider::TextBoxBelow, true, 40, 20);
     exponentSlider.setValue(1.0);
@@ -46,9 +46,9 @@ SelfMultAudioProcessorEditor::SelfMultAudioProcessorEditor (SelfMultAudioProcess
     addAndMakeVisible(exponentLabel);
 
     volSlider.setSliderStyle(juce::Slider::LinearBarVertical);
-    volSlider.setRange(0.0, 10.0, 0.0);
+    volSlider.setRange(0.0, 4.0, 0.0);
     volSlider.setTextBoxStyle(juce::Slider::NoTextBox, false, 90, 0);
-    volSlider.setSkewFactorFromMidPoint(5);
+    volSlider.setSkewFactorFromMidPoint(1);
     volSlider.setValue(1.0);
 
     volSlider.addListener(this);

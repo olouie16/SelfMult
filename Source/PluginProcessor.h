@@ -73,10 +73,19 @@ private:
 
     juce::AudioBuffer<float> rmsBuffer;
     std::vector<std::vector<float> > rmsVolumeCoefs;
-    float rmsSum;
-    int rmsBufferIndex;
+    std::vector<float> rmsSum;
+    std::vector<int> rmsBufferIndex;
     int rmsWindowLength;
 
+    float getSoftAttackFactor(int channel);
+    void activateSoftAttack(int channel);
+    void checkSoftAttackTrigger(int channel, float* rmsData);
+    std::vector<float> softAttackWindow;
+    int softAttackWindowLength;
+    std::vector<float> softAttackMaxRise;
+    std::vector<int> softAttackMaxRiseIndex;
+    std::vector<bool> softAttackInProgress;
+    std::vector<int> softAttackProgress;
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (SelfMultAudioProcessor)
 };

@@ -2,7 +2,9 @@
 
 <JUCERPROJECT id="gR8por" name="SelfMult" projectType="audioplug" useAppConfig="0"
               addUsingNamespaceToJuceHeader="0" displaySplashScreen="1" jucerFormatVersion="1"
-              pluginFormats="buildStandalone,buildVST3" pluginVST3Category="Distortion,Fx">
+              pluginFormats="buildStandalone,buildVST3" pluginVST3Category="Distortion,Fx"
+              version="0.1" pluginAAXCategory="32" pluginVSTCategory="kPlugCategEffect"
+              pluginManufacturer="GitHub/olouie16" companyName="olouie16">
   <MAINGROUP id="IdBGm0" name="SelfMult">
     <GROUP id="{5B27F37A-16F1-E135-8233-06E26142B7C3}" name="Source">
       <FILE id="f66q4W" name="PluginProcessor.cpp" compile="1" resource="0"
